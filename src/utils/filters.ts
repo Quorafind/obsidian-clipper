@@ -38,6 +38,7 @@ import { uncamel } from './filters/uncamel';
 import { unescape } from './filters/unescape';
 import { upper } from './filters/upper';
 import { wikilink } from './filters/wikilink';
+import { fragment } from './filters/fragment';
 
 export const filters: { [key: string]: FilterFunction } = {
 	blockquote,
@@ -77,7 +78,8 @@ export const filters: { [key: string]: FilterFunction } = {
 	uncamel,
 	unescape,
 	upper,
-	wikilink
+	wikilink,
+	fragment
 };
 
 // Split the individual filter names
@@ -178,7 +180,7 @@ function parseFilterString(filterString: string): string[] {
 		} else if (!inQuote) {
 			if (char === '(') depth++;
 			if (char === ')') depth--;
-			
+
 			if (char === ':' && depth === 0 && parts.length === 0) {
 				parts.push(current.trim());
 				current = '';
@@ -221,42 +223,47 @@ export function applyFilters(value: string | any[], filterString: string, curren
 
 	// Reduce through all filter names, applying each filter sequentially
 	const result = filterNames.reduce((result, filterName) => {
-			// Parse the filter string into name and parameters
-			const [name, ...params] = parseFilterString(filterName);
-			debugLog('Filters', `Parsed filter: ${name}, Params:`, params);
+		// Parse the filter string into name and parameters
+		const [name, ...params] = parseFilterString(filterName);
+		debugLog('Filters', `Parsed filter: ${name}, Params:`, params);
 
-			// Get the filter function from the filters object
-			const filter = filters[name];
-			if (filter) {
-				// Convert the input to a string if it's not already
-				const stringInput = typeof result === 'string' ? result : JSON.stringify(result);
-				
-				// Special case for markdown filter: use currentUrl if no params provided
-				if (name === 'markdown' && params.length === 0 && currentUrl) {
-					params.push(currentUrl);
-				}
-				
-				// Apply the filter and get the output
-				const output = filter(stringInput, params.join(':'));
-				
-				debugLog('Filters', `Filter ${name} output:`, output);
+		// Get the filter function from the filters object
+		const filter = filters[name];
+		if (filter) {
+			// Convert the input to a string if it's not already
+			const stringInput = typeof result === 'string' ? result : JSON.stringify(result);
 
-				// If the output is a string that looks like JSON, try to parse it
-				if (typeof output === 'string' && (output.startsWith('[') || output.startsWith('{'))) {
-					try {
-						return JSON.parse(output);
-					} catch {
-						return output;
-					}
-				}
-				return output;
-			} else {
-				// If the filter doesn't exist, log an error and return the unmodified result
-				console.error(`Invalid filter: ${name}`);
-				debugLog('Filters', `Available filters:`, Object.keys(filters));
-				return result;
+			// Special case for markdown filter: use currentUrl if no params provided
+			if (name === 'markdown' && params.length === 0 && currentUrl) {
+				params.push(currentUrl);
 			}
-		}, processedValue);
+
+			// Special case for fragment filter: use currentUrl if no params provided
+			if (name === 'fragment' && params.length === 0 && currentUrl) {
+				params.push(currentUrl);
+			}
+
+			// Apply the filter and get the output
+			const output = filter(stringInput, params.join(':'));
+
+			debugLog('Filters', `Filter ${name} output:`, output);
+
+			// If the output is a string that looks like JSON, try to parse it
+			if (typeof output === 'string' && (output.startsWith('[') || output.startsWith('{'))) {
+				try {
+					return JSON.parse(output);
+				} catch {
+					return output;
+				}
+			}
+			return output;
+		} else {
+			// If the filter doesn't exist, log an error and return the unmodified result
+			console.error(`Invalid filter: ${name}`);
+			debugLog('Filters', `Available filters:`, Object.keys(filters));
+			return result;
+		}
+	}, processedValue);
 
 	// Ensure the final result is a string
 	return typeof result === 'string' ? result : JSON.stringify(result);
